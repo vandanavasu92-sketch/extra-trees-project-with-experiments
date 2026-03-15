@@ -1,4 +1,3 @@
-```python
 # ===============================================================
 # DATA PREPROCESSING SCRIPT FOR PROJECT
 # Decision Tree vs Random Forest vs Extremely Randomized Trees
@@ -19,7 +18,6 @@
 
 # Import required libraries
 import pandas as pd
-import numpy as np
 
 # sklearn utilities for dataset splitting
 from sklearn.model_selection import train_test_split
@@ -33,8 +31,8 @@ from sklearn.datasets import load_breast_cancer
 # ===============================================================
 
 # Load the stroke dataset
-# Make sure stroke_raw.csv is placed in the data/ folder
-stroke_df = pd.read_csv("data/stroke_raw.csv")
+# Make sure healthcare-dataset-stroke-data.csv is placed in the data/ folder
+stroke_df = pd.read_csv("data/healthcare-dataset-stroke-data.csv")
 
 # ---------------------------------------------------------------
 # STEP 1: Remove unnecessary columns
@@ -102,7 +100,8 @@ X_train_s, X_test_s, y_train_s, y_test_s = train_test_split(
     X_stroke,
     y_stroke,
     test_size=0.2,
-    random_state=42
+    random_state=42,
+    stratify=y_stroke
 )
 
 
@@ -173,4 +172,4 @@ print("Team members can now load these datasets to train:")
 print("- Decision Tree")
 print("- Random Forest")
 print("- Extra Trees")
-```
+
