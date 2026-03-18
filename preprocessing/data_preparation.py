@@ -6,7 +6,7 @@
 # This script prepares two datasets for the experiments:
 #
 # 1. Stroke Prediction Dataset
-# 2. Breast Cancer Wisconsin Dataset
+# 2. Pima Indians Diabetes Dataset
 #
 # The goal is to:
 # - clean the data
@@ -14,16 +14,18 @@
 # - separate features (X) and target (Y)
 # - split into training and testing sets
 #
+# After this step, all team members will use the SAME datasets
+# to ensure fair comparison between models.
+#
 # ===============================================================
 
-# Import required libraries
+# ---------------------------------------------------------------
+# IMPORT REQUIRED LIBRARIES
+# ---------------------------------------------------------------
 import pandas as pd
+import numpy as np
 
-# sklearn utilities for dataset splitting
 from sklearn.model_selection import train_test_split
-
-# sklearn dataset loader for Breast Cancer dataset
-from sklearn.datasets import load_breast_cancer
 
 
 # ===============================================================
@@ -31,71 +33,65 @@ from sklearn.datasets import load_breast_cancer
 # ===============================================================
 
 # Load the stroke dataset
-# Make sure healthcare-dataset-stroke-data.csv is placed in the data/ folder
+# Make sure the file is placed in the data/ folder
+# Example file name:
+# data/healthcare-dataset-stroke-data.csv
 stroke_df = pd.read_csv("data/healthcare-dataset-stroke-data.csv")
 
 # ---------------------------------------------------------------
-# STEP 1: Remove unnecessary columns
+# STEP 1: REMOVE UNNECESSARY COLUMNS
 # ---------------------------------------------------------------
-# The 'id' column is just a unique identifier and does not help
-# the model learn any pattern, so we remove it.
-
-if 'id' in stroke_df.columns:
-    stroke_df = stroke_df.drop(columns=['id'])
-
-
-# ---------------------------------------------------------------
-# STEP 2: Handle missing values
-# ---------------------------------------------------------------
-# In the stroke dataset, the BMI column sometimes contains
-# missing values. We replace them with the median value.
-#
-# Median is often preferred for medical data because it is
-# robust to outliers.
-
-stroke_df['bmi'] = stroke_df['bmi'].fillna(stroke_df['bmi'].median())
+# The 'id' column is only a patient identifier.
+# It does not help the model learn any predictive pattern.
+if "id" in stroke_df.columns:
+    stroke_df = stroke_df.drop(columns=["id"])
 
 
 # ---------------------------------------------------------------
-# STEP 3: Encode categorical variables
+# STEP 2: HANDLE MISSING VALUES
 # ---------------------------------------------------------------
-# Some columns contain text categories (e.g. gender, work_type).
-# Machine learning models require numerical inputs.
-#
-# We convert categorical columns into numeric form using
-# one-hot encoding.
+# In the stroke dataset, BMI often contains missing values.
+# We fill missing BMI values with the median.
+# Median is preferred because it is less affected by outliers.
+stroke_df["bmi"] = stroke_df["bmi"].fillna(stroke_df["bmi"].median())
 
+
+# ---------------------------------------------------------------
+# STEP 3: ENCODE CATEGORICAL VARIABLES
+# ---------------------------------------------------------------
+# Machine learning models need numerical input.
+# The following columns are categorical and must be converted
+# into numeric form using one-hot encoding.
 categorical_cols = [
-    'gender',
-    'ever_married',
-    'work_type',
-    'Residence_type',
-    'smoking_status'
+    "gender",
+    "ever_married",
+    "work_type",
+    "Residence_type",
+    "smoking_status"
 ]
 
-stroke_df = pd.get_dummies(stroke_df, columns=categorical_cols)
+stroke_df = pd.get_dummies(stroke_df, columns=categorical_cols, drop_first=False)
 
 
 # ---------------------------------------------------------------
-# STEP 4: Separate predictors (X) and target (Y)
+# STEP 4: SEPARATE FEATURES (X) AND TARGET (Y)
 # ---------------------------------------------------------------
-# Y = variable we want to predict
-# X = all input features used by the model
-
-X_stroke = stroke_df.drop(columns=['stroke'])
-y_stroke = stroke_df['stroke']
+# X = predictor variables
+# Y = target variable we want to predict
+X_stroke = stroke_df.drop(columns=["stroke"])
+y_stroke = stroke_df["stroke"]
 
 
 # ---------------------------------------------------------------
-# STEP 5: Train-test split
+# STEP 5: TRAIN-TEST SPLIT
 # ---------------------------------------------------------------
-# We divide the dataset into:
-# - training set (80%)
-# - testing set (20%)
+# We split the data into:
+# - 80% training data
+# - 20% testing data
 #
-# The training set is used to train models.
-# The test set evaluates model performance.
-
+# stratify=y_stroke keeps the class distribution similar
+# in both training and testing sets, which is important for
+# classification problems.
 X_train_s, X_test_s, y_train_s, y_test_s = train_test_split(
     X_stroke,
     y_stroke,
@@ -106,70 +102,108 @@ X_train_s, X_test_s, y_train_s, y_test_s = train_test_split(
 
 
 # ---------------------------------------------------------------
-# STEP 6: Save the processed stroke dataset
+# STEP 6: SAVE PROCESSED STROKE DATA
 # ---------------------------------------------------------------
-# This allows all team members to load the same clean dataset.
-
-X_train_s.to_csv("data/X_train_stroke.csv", index=False)
-X_test_s.to_csv("data/X_test_stroke.csv", index=False)
-
-y_train_s.to_csv("data/y_train_stroke.csv", index=False)
-y_test_s.to_csv("data/y_test_stroke.csv", index=False)
-
+# Saving processed files ensures that all team members use
+# the exact same cleaned dataset and split.
+X_train_s.to_csv("data/processed/X_train_stroke.csv", index=False)
+X_test_s.to_csv("data/processed/X_test_stroke.csv", index=False)
+y_train_s.to_csv("data/processed/y_train_stroke.csv", index=False)
+y_test_s.to_csv("data/processed/y_test_stroke.csv", index=False)
 
 print("Stroke dataset preprocessing completed.")
 
 
 # ===============================================================
-# PART 2: PREPROCESS BREAST CANCER DATASET
+# PART 2: PREPROCESS PIMA INDIANS DIABETES DATASET
 # ===============================================================
 
-# Load the dataset directly from sklearn
-cancer = load_breast_cancer()
+# Load the Pima dataset
+# If your CSV has no header row, use header=None and assign names.
+# Example file name:
+# data/pima-indians-diabetes.csv
+pima_columns = [
+    "Pregnancies",
+    "Glucose",
+    "BloodPressure",
+    "SkinThickness",
+    "Insulin",
+    "BMI",
+    "DiabetesPedigreeFunction",
+    "Age",
+    "Outcome"
+]
 
-# Convert dataset to pandas DataFrame
-X_cancer = pd.DataFrame(cancer.data, columns=cancer.feature_names)
-
-# Target variable (malignant or benign)
-y_cancer = pd.Series(cancer.target)
+pima_df = pd.read_csv("data/pima-indians-diabetes.csv", header=None, names=pima_columns)
 
 
 # ---------------------------------------------------------------
-# STEP 1: Train-test split
+# STEP 1: CHECK FOR INVALID ZERO VALUES
 # ---------------------------------------------------------------
-# Breast cancer dataset is already very clean,
-# so we only need to split the data.
+# In this dataset, some medical variables contain 0 values that
+# are not realistic and usually represent missing data.
+#
+# These columns should not normally be 0:
+# - Glucose
+# - BloodPressure
+# - SkinThickness
+# - Insulin
+# - BMI
+#
+# We replace 0 with NaN so that they can be treated as missing values.
+zero_as_missing_cols = ["Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"]
 
-X_train_c, X_test_c, y_train_c, y_test_c = train_test_split(
-    X_cancer,
-    y_cancer,
+for col in zero_as_missing_cols:
+    pima_df[col] = pima_df[col].replace(0, np.nan)
+
+
+# ---------------------------------------------------------------
+# STEP 2: HANDLE MISSING VALUES
+# ---------------------------------------------------------------
+# After replacing invalid zeros with NaN, fill missing values
+# using the median of each column.
+# Median is a safe choice for medical variables because it is
+# robust to extreme values.
+for col in zero_as_missing_cols:
+    pima_df[col] = pima_df[col].fillna(pima_df[col].median())
+
+
+# ---------------------------------------------------------------
+# STEP 3: SEPARATE FEATURES (X) AND TARGET (Y)
+# ---------------------------------------------------------------
+X_pima = pima_df.drop(columns=["Outcome"])
+y_pima = pima_df["Outcome"]
+
+
+# ---------------------------------------------------------------
+# STEP 4: TRAIN-TEST SPLIT
+# ---------------------------------------------------------------
+# Again, use stratify to maintain class balance across train/test sets.
+X_train_p, X_test_p, y_train_p, y_test_p = train_test_split(
+    X_pima,
+    y_pima,
     test_size=0.2,
-    random_state=42
+    random_state=42,
+    stratify=y_pima
 )
 
 
 # ---------------------------------------------------------------
-# STEP 2: Save processed breast cancer dataset
+# STEP 5: SAVE PROCESSED PIMA DATA
 # ---------------------------------------------------------------
+X_train_p.to_csv("data/processed/X_train_pima.csv", index=False)
+X_test_p.to_csv("data/processed/X_test_pima.csv", index=False)
+y_train_p.to_csv("data/processed/y_train_pima.csv", index=False)
+y_test_p.to_csv("data/processed/y_test_pima.csv", index=False)
 
-X_train_c.to_csv("data/X_train_cancer.csv", index=False)
-X_test_c.to_csv("data/X_test_cancer.csv", index=False)
-
-y_train_c.to_csv("data/y_train_cancer.csv", index=False)
-y_test_c.to_csv("data/y_test_cancer.csv", index=False)
-
-
-print("Breast Cancer dataset preprocessing completed.")
+print("Pima Indians Diabetes dataset preprocessing completed.")
 
 
 # ===============================================================
 # FINAL MESSAGE
 # ===============================================================
-
 print("All datasets are now cleaned and ready for modeling.")
-
 print("Team members can now load these datasets to train:")
 print("- Decision Tree")
 print("- Random Forest")
 print("- Extra Trees")
-
