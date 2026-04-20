@@ -1,209 +1,304 @@
-# ===============================================================
-# DATA PREPROCESSING SCRIPT FOR PROJECT
-# Decision Tree vs Random Forest vs Extremely Randomized Trees
-# ===============================================================
-#
-# This script prepares two datasets for the experiments:
-#
-# 1. Stroke Prediction Dataset
-# 2. Pima Indians Diabetes Dataset
-#
-# The goal is to:
-# - clean the data
-# - encode categorical variables
-# - separate features (X) and target (Y)
-# - split into training and testing sets
-#
-# After this step, all team members will use the SAME datasets
-# to ensure fair comparison between models.
-#
-# ===============================================================
+"""
+Preprocessing for Extra Trees project
 
-# ---------------------------------------------------------------
-# IMPORT REQUIRED LIBRARIES
-# ---------------------------------------------------------------
-import pandas as pd
+✔ Handles datasets WITHOUT headers
+✔ Cleans + encodes data
+✔ Saves FULL dataset only (no train/test split)
+"""
+
 import numpy as np
-
-from sklearn.model_selection import train_test_split
-
-
-# ===============================================================
-# PART 1: PREPROCESS STROKE DATASET
-# ===============================================================
-
-# Load the stroke dataset
-# Make sure the file is placed in the data/ folder
-# Example file name:
-# data/healthcare-dataset-stroke-data.csv
-stroke_df = pd.read_csv("data/healthcare-dataset-stroke-data.csv")
-
-# ---------------------------------------------------------------
-# STEP 1: REMOVE UNNECESSARY COLUMNS
-# ---------------------------------------------------------------
-# The 'id' column is only a patient identifier.
-# It does not help the model learn any predictive pattern.
-if "id" in stroke_df.columns:
-    stroke_df = stroke_df.drop(columns=["id"])
+import pandas as pd
+from pathlib import Path
 
 
-# ---------------------------------------------------------------
-# STEP 2: HANDLE MISSING VALUES
-# ---------------------------------------------------------------
-# In the stroke dataset, BMI often contains missing values.
-# We fill missing BMI values with the median.
-# Median is preferred because it is less affected by outliers.
-stroke_df["bmi"] = stroke_df["bmi"].fillna(stroke_df["bmi"].median())
+RAW_DIR = Path("data/raw")
+PROCESSED_DIR = Path("data/processed")
 
 
-# ---------------------------------------------------------------
-# STEP 3: ENCODE CATEGORICAL VARIABLES
-# ---------------------------------------------------------------
-# Machine learning models need numerical input.
-# The following columns are categorical and must be converted
-# into numeric form using one-hot encoding.
-categorical_cols = [
-    "gender",
-    "ever_married",
-    "work_type",
-    "Residence_type",
-    "smoking_status"
+# ============================================================
+# Helper functions
+# ============================================================
+
+def ensure_dir(path):
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def save_dataset(name, X, y):
+    out_dir = PROCESSED_DIR / name
+    ensure_dir(out_dir)
+
+    X.to_csv(out_dir / "X.csv", index=False)
+    y.to_frame("target").to_csv(out_dir / "y.csv", index=False)
+
+    print(f"Saved: {name}")
+
+
+def one_hot_encode(df):
+    cat_cols = df.select_dtypes(include=["object", "category"]).columns
+    if len(cat_cols) > 0:
+        df = pd.get_dummies(df, columns=cat_cols, drop_first=False)
+    return df
+
+
+# ============================================================
+# CLASSIFICATION DATASETS
+# ============================================================
+
+def preprocess_pima():
+    df = pd.read_csv(RAW_DIR / "pima.csv", header=None)
+
+    df.columns = [
+        "Pregnancies", "Glucose", "BloodPressure", "SkinThickness",
+        "Insulin", "BMI", "DiabetesPedigreeFunction", "Age", "Outcome"
+    ]
+
+    zero_cols = ["Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"]
+
+    for col in zero_cols:
+        df[col] = df[col].replace(0, np.nan)
+        df[col] = df[col].fillna(df[col].median())
+
+    X = df.drop(columns=["Outcome"])
+    y = df["Outcome"].astype(int)
+
+    save_dataset("pima", X, y)
+
+
+def preprocess_breast_cancer():
+    df = pd.read_csv(RAW_DIR / "breast_cancer.csv", header=None)
+
+    df.columns = [
+        "id", "diagnosis",
+        *[f"f{i}" for i in range(30)]
+    ]
+
+    df = df.dropna(how="all")
+    df["diagnosis"] = df["diagnosis"].astype(str).str.strip()
+
+    df = df[df["diagnosis"].isin(["M", "B"])]
+    df = df.drop(columns=["id"])
+
+    df["diagnosis"] = df["diagnosis"].map({"M": 1, "B": 0})
+
+    X = df.drop(columns=["diagnosis"])
+    y = df["diagnosis"].astype(int)
+
+    save_dataset("breast_cancer", X, y)
+
+
+def preprocess_ionosphere():
+    df = pd.read_csv(RAW_DIR / "ionosphere.csv", header=None)
+
+    df.columns = [f"f{i}" for i in range(df.shape[1] - 1)] + ["target"]
+    df["target"] = df["target"].map({"g": 1, "b": 0})
+
+    X = df.drop(columns=["target"])
+    y = df["target"].astype(int)
+
+    save_dataset("ionosphere", X, y)
+
+
+def preprocess_sonar():
+    df = pd.read_csv(RAW_DIR / "sonar.csv", header=None)
+
+    df.columns = [f"f{i}" for i in range(df.shape[1] - 1)] + ["target"]
+    df["target"] = df["target"].map({"M": 1, "R": 0})
+
+    X = df.drop(columns=["target"])
+    y = df["target"].astype(int)
+
+    save_dataset("sonar", X, y)
+
+
+def preprocess_vehicle():
+    df = pd.read_csv(RAW_DIR / "vehicle.csv", header=None)
+
+    # remove fully empty rows
+    df = df.dropna(how="all")
+
+    # set columns
+    df.columns = [f"f{i}" for i in range(df.shape[1] - 1)] + ["target"]
+
+    # clean target labels
+    df["target"] = df["target"].astype(str).str.strip().str.lower()
+
+    # convert feature columns to numeric
+    feature_cols = df.columns[:-1]
+    for col in feature_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # drop malformed rows
+    df = df.dropna()
+
+    # keep only valid class labels
+    valid_labels = {"bus", "opel", "saab", "van"}
+    df = df[df["target"].isin(valid_labels)]
+
+    # map to integer labels
+    class_map = {label: idx for idx, label in enumerate(sorted(valid_labels))}
+    df["target"] = df["target"].map(class_map)
+
+    X = df.drop(columns=["target"])
+    y = df["target"].astype(int)
+
+    save_dataset("vehicle", X, y)
+
+
+def preprocess_heart_disease():
+    df = pd.read_csv(RAW_DIR / "heart_disease.csv", header=None)
+
+    df = df.replace("?", np.nan)
+
+    for col in df.columns:
+        try:
+            df[col] = pd.to_numeric(df[col])
+        except Exception:
+            pass
+
+    for col in df.columns:
+        if df[col].isna().any():
+            if str(df[col].dtype) != "object":
+                df[col] = df[col].fillna(df[col].median())
+            else:
+                df[col] = df[col].fillna(df[col].mode()[0])
+
+    target_col = df.columns[-1]
+
+    df[target_col] = (df[target_col] > 0).astype(int)
+
+    X = one_hot_encode(df.drop(columns=[target_col]))
+    y = df[target_col].astype(int)
+
+    save_dataset("heart_disease", X, y)
+
+
+# ============================================================
+# REGRESSION DATASETS
+# ============================================================
+
+def preprocess_abalone():
+    df = pd.read_csv(RAW_DIR / "abalone.csv", header=None)
+
+    df.columns = [
+        "Sex", "Length", "Diameter", "Height",
+        "Whole_weight", "Shucked_weight",
+        "Viscera_weight", "Shell_weight", "Rings"
+    ]
+
+    X = one_hot_encode(df.drop(columns=["Rings"]))
+    y = df["Rings"].astype(float)
+
+    save_dataset("abalone", X, y)
+
+
+def preprocess_concrete():
+    possible_files = [
+        RAW_DIR / "concrete.xlsx",
+        RAW_DIR / "Concrete_Data.xlsx",
+        RAW_DIR / "concrete.xls",
+        RAW_DIR / "Concrete_Data.xls",
+    ]
+
+    file_path = None
+    for f in possible_files:
+        if f.exists():
+            file_path = f
+            break
+
+    if file_path is None:
+        raise FileNotFoundError("Concrete dataset not found in data/raw")
+
+    if file_path.suffix == ".xls":
+        df = pd.read_excel(file_path, engine="xlrd")
+    else:
+        df = pd.read_excel(file_path)
+
+    target = df.columns[-1]
+
+    X = df.drop(columns=[target])
+    y = df[target].astype(float)
+
+    save_dataset("concrete", X, y)
+
+
+def preprocess_energy_efficiency():
+    df = pd.read_excel(RAW_DIR / "energy_efficiency.xlsx")
+
+    target = df.columns[-2]
+
+    X = df.drop(columns=[target])
+    y = df[target].astype(float)
+
+    save_dataset("energy_efficiency", X, y)
+
+
+def preprocess_airfoil():
+    df = pd.read_csv(RAW_DIR / "airfoil_self_noise.csv", sep=r"\s+", header=None)
+
+    df.columns = ["f1", "f2", "f3", "f4", "f5", "target"]
+
+    X = df.drop(columns=["target"])
+    y = df["target"].astype(float)
+
+    save_dataset("airfoil", X, y)
+
+
+def preprocess_cpu_performance():
+    df = pd.read_csv(RAW_DIR / "cpu_performance.csv")
+
+    drop_cols = [c for c in ["vendor_name", "model_name"] if c in df.columns]
+
+    target = df.columns[-1]
+
+    X = one_hot_encode(df.drop(columns=drop_cols + [target]))
+    y = df[target].astype(float)
+
+    save_dataset("cpu_performance", X, y)
+
+
+def preprocess_boston_housing():
+    df = pd.read_csv(RAW_DIR / "boston_housing.csv")
+
+    target = df.columns[-1]
+
+    X = df.drop(columns=[target])
+    y = df[target].astype(float)
+
+    save_dataset("boston_housing", X, y)
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+DATASETS = [
+    preprocess_pima,
+    preprocess_breast_cancer,
+    preprocess_ionosphere,
+    preprocess_sonar,
+    preprocess_vehicle,
+    preprocess_heart_disease,
+    preprocess_abalone,
+    preprocess_concrete,
+    preprocess_energy_efficiency,
+    preprocess_airfoil,
+    preprocess_cpu_performance,
+    preprocess_boston_housing,
 ]
 
-stroke_df = pd.get_dummies(stroke_df, columns=categorical_cols, drop_first=False)
 
+if __name__ == "__main__":
+    ensure_dir(PROCESSED_DIR)
 
-# ---------------------------------------------------------------
-# STEP 4: SEPARATE FEATURES (X) AND TARGET (Y)
-# ---------------------------------------------------------------
-# X = predictor variables
-# Y = target variable we want to predict
-X_stroke = stroke_df.drop(columns=["stroke"])
-y_stroke = stroke_df["stroke"]
+    print("=" * 60)
+    print("Running preprocessing...")
+    print("=" * 60)
 
+    for fn in DATASETS:
+        try:
+            fn()
+        except Exception as e:
+            print(f"Error in {fn.__name__}: {e}")
 
-# ---------------------------------------------------------------
-# STEP 5: TRAIN-TEST SPLIT
-# ---------------------------------------------------------------
-# We split the data into:
-# - 80% training data
-# - 20% testing data
-#
-# stratify=y_stroke keeps the class distribution similar
-# in both training and testing sets, which is important for
-# classification problems.
-X_train_s, X_test_s, y_train_s, y_test_s = train_test_split(
-    X_stroke,
-    y_stroke,
-    test_size=0.2,
-    random_state=42,
-    stratify=y_stroke
-)
-
-
-# ---------------------------------------------------------------
-# STEP 6: SAVE PROCESSED STROKE DATA
-# ---------------------------------------------------------------
-# Saving processed files ensures that all team members use
-# the exact same cleaned dataset and split.
-X_train_s.to_csv("data/processed/X_train_stroke.csv", index=False)
-X_test_s.to_csv("data/processed/X_test_stroke.csv", index=False)
-y_train_s.to_csv("data/processed/y_train_stroke.csv", index=False)
-y_test_s.to_csv("data/processed/y_test_stroke.csv", index=False)
-
-print("Stroke dataset preprocessing completed.")
-
-
-# ===============================================================
-# PART 2: PREPROCESS PIMA INDIANS DIABETES DATASET
-# ===============================================================
-
-# Load the Pima dataset
-# If your CSV has no header row, use header=None and assign names.
-# Example file name:
-# data/pima-indians-diabetes.csv
-pima_columns = [
-    "Pregnancies",
-    "Glucose",
-    "BloodPressure",
-    "SkinThickness",
-    "Insulin",
-    "BMI",
-    "DiabetesPedigreeFunction",
-    "Age",
-    "Outcome"
-]
-
-pima_df = pd.read_csv("data/pima-indians-diabetes.csv", header=None, names=pima_columns)
-
-
-# ---------------------------------------------------------------
-# STEP 1: CHECK FOR INVALID ZERO VALUES
-# ---------------------------------------------------------------
-# In this dataset, some medical variables contain 0 values that
-# are not realistic and usually represent missing data.
-#
-# These columns should not normally be 0:
-# - Glucose
-# - BloodPressure
-# - SkinThickness
-# - Insulin
-# - BMI
-#
-# We replace 0 with NaN so that they can be treated as missing values.
-zero_as_missing_cols = ["Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"]
-
-for col in zero_as_missing_cols:
-    pima_df[col] = pima_df[col].replace(0, np.nan)
-
-
-# ---------------------------------------------------------------
-# STEP 2: HANDLE MISSING VALUES
-# ---------------------------------------------------------------
-# After replacing invalid zeros with NaN, fill missing values
-# using the median of each column.
-# Median is a safe choice for medical variables because it is
-# robust to extreme values.
-for col in zero_as_missing_cols:
-    pima_df[col] = pima_df[col].fillna(pima_df[col].median())
-
-
-# ---------------------------------------------------------------
-# STEP 3: SEPARATE FEATURES (X) AND TARGET (Y)
-# ---------------------------------------------------------------
-X_pima = pima_df.drop(columns=["Outcome"])
-y_pima = pima_df["Outcome"]
-
-
-# ---------------------------------------------------------------
-# STEP 4: TRAIN-TEST SPLIT
-# ---------------------------------------------------------------
-# Again, use stratify to maintain class balance across train/test sets.
-X_train_p, X_test_p, y_train_p, y_test_p = train_test_split(
-    X_pima,
-    y_pima,
-    test_size=0.2,
-    random_state=42,
-    stratify=y_pima
-)
-
-
-# ---------------------------------------------------------------
-# STEP 5: SAVE PROCESSED PIMA DATA
-# ---------------------------------------------------------------
-X_train_p.to_csv("data/processed/X_train_pima.csv", index=False)
-X_test_p.to_csv("data/processed/X_test_pima.csv", index=False)
-y_train_p.to_csv("data/processed/y_train_pima.csv", index=False)
-y_test_p.to_csv("data/processed/y_test_pima.csv", index=False)
-
-print("Pima Indians Diabetes dataset preprocessing completed.")
-
-
-# ===============================================================
-# FINAL MESSAGE
-# ===============================================================
-print("All datasets are now cleaned and ready for modeling.")
-print("Team members can now load these datasets to train:")
-print("- Decision Tree")
-print("- Random Forest")
-print("- Extra Trees")
+    print("=" * 60)
+    print("Preprocessing complete.")
